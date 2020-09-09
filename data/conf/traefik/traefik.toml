@@ -1,0 +1,190 @@
+[http]
+  [http.routers]
+    [http.routers.api]
+      entryPoints = ["websecure"]
+      rule = "Host(`marvinmannattorney.com`) || (Host(`www.marvinmannattorney.com`) && PathPrefix(`/api`) || PathPrefix(`/dashboard`)"
+      service = "api@internal"
+      middlewares = ["authentication", "default-headers"]
+      
+    [http.routers.wordpress]    
+      entryPoints = ["websecure"] 
+      rule = "Host(`marvinmannattorney.com`) || (Host(`www.marvinmannattorney.com`)"
+      service = "wordpress" 
+      middlewares = ["cloudflare-wordpress"]
+     
+    [http.routers.wp-admin]
+      entryPoints = ["websecure"]
+      rule = "Host(`marvinmannattorney.com`) || (Host(`www.marvinmannattorney.com`) && PATH(`/wp-admin`)"
+      service = "wordpress"
+      middlewares = ["authentication", "cloudflare-ipwhitelist", "default-headers" ]
+            
+  [http.middlewares]
+ 
+    [http.middlewares.wordpress-chain.chain]
+      middlewares = ["cloudflare-ipwhitelist", "wordpress-error"]
+
+    [http.middlewares.default-header.headers]
+      frameDeny = true
+      contentTypeNosniff = true
+      browserXssFilter = true
+      sslRedirect = true
+      sslTemporaryRedirect = false
+      forceSTSHeader = true
+      stsSeconds = 3153600
+      stsPreload = true
+      stsIncludeSubdomains = true
+      referrerPolicy = no-referrer
+      featurePolicy = "accelerometer 'none'; ambient-light-sensor 'self'; autoplay 'self'; camera 'none'; encrypted-media 'self'; fullscreen 'self'; geolocation 'self'; gyroscope 'none'; magnetometer 'none'; microphone 'none'; midi 'none'; payment 'none'; picture-in-picture *; speaker 'none'; sync-xhr 'none'; usb *; vr 'none'"
+      contentSecurityPolicy = "upgrade-insecure-requests: default-src 'self'"
+  
+    [http.middlewares.authentication.basicAuth]
+      usersFile = "/var/lib/traefik/.htpasswd"
+      headerField = "X-WebAuth-User"
+
+    [http.middlewares.cloudflare-ipwhitelist.ipWhiteList]
+      sourceRange = [
+        "173.245.48.0/20",
+        "103.21.244.0/22",
+        "103.22.200.0/22",
+        "103.31.4.0/22",
+        "141.101.64.0/18",
+        "108.162.192.0/18",
+        "190.93.240.0/20", 
+        "188.114.96.0/20", 
+        "197.234.240.0/22", 
+        "198.41.128.0/17", 
+        "162.158.0.0/15", 
+        "104.16.0.0/12", 
+        "172.64.0.0/13", 
+        "131.0.72.0/22"
+      ]
+      [http.middlewares.cloudflare-ipwhitelist.ipWhiteList.ipStrategy]
+        depth = 2
+
+    [http.middlewares.wordpress-error.errors]
+      status = ["500-502", "503-599"]
+      service = "errorpage"
+      query = "/50x.html"
+    
+  [http.services]
+    [http.services.wordpress.loadBalancer]
+      passHostHeader = true
+      [[http.services.wordpress.loadBalancer.servers]]
+        url = "http://wordpress:9000"
+
+[tls]
+
+  [[tls.certificates]]
+    certFile = "/var/lib/traefik/cert.pem"
+    keyFile = "/var/lib/traefik/key.pem"
+
+  [tls.options]
+    [tls.options.default]
+      minVersion = "VersionTLS12"
+      cipherSuites = [
+        "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305",
+        "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305",
+        "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+        "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+      ]
+      sniStrict = true
+      curvePreferences = ["CurveP521", "CurveP384"]
+      preferServerCipherSuites = true
+      [tls.options.default.clientAuth]
+        caFiles = ["/var/lib/traefik/cloudflare.crt"]
+        clientAuthType = "RequireAndVerifyClientCert"
+  
+  [tls.stores]
+    [tls.stores.default]
+      [tls.stores.default.defaultCertificate]
+        certFile = "/var/lib/traefik/cert.pem"
+        keyFile = "/var/lib/traefik/key.pem"
+
+[global]
+  checkNewVersion = true
+  sendAnonymousUsage = false
+
+[serversTransport]
+  rootCAs = ["clloudflare.crt", "ca.pem"]
+
+[hostResolver]
+  cnameFlattening = true
+
+[log]
+  level = "DEBUG"
+  filePath = "traefik.log"
+
+[accessLog]
+  filePath = "access.log"
+  bufferingSize = 100
+  format = "json"
+  
+  [accessLog.filters]    
+    statusCodes = ["200", "300-302"]
+    retryAttempts = true
+    minDuration = "10ms"
+    
+  [accessLog.fields]
+    defaultMode = "keep"
+    
+    [accessLog.fields.names]
+      "ClientUsername" = "drop"
+      
+    [accessLog.fields.headers]
+      defaultMode = "keep"
+      
+      [accessLog.fields.headers.names]
+        "User-Agent" = "redact"
+        "Authorization" = "drop"
+        "Content-Type" = "keep"
+
+[entryPoints]
+  [entryPoints.web]
+    address = ":80"
+    [entryPoints.web.http]
+    [entryPoints.web.http.redirections]
+      [entryPoints.web.http.redirections.entryPoint]
+        to = "websecure"
+        scheme = "https"
+        permanent = true
+
+  [entryPoints.websecure]
+    address = ":443"
+    [entryPoints.websecure.http]
+      middlewares = ["default-headers@file", "cf_client@file"]
+      [entryPoints.websecure.http.tls]
+        options = "default"
+        certResolver = "cloudflare"
+        [[entryPoints.websecure.http.tls.domains]]
+          main = "marvinmannattorney.com"
+          sans = ["www.marvinmannattorney.com", "blog.marvinmannattorney.com"]
+
+[api]
+  insecure = false  
+  dashboard = true
+
+[ping]
+  entryPoint = "traefik"
+
+[metrics]
+  [metrics.prometheus]
+    buckets = [0.1,0.3,1.2,5.0]
+    addEntryPointsLabels = true
+    addServicesLabels = true
+    entryPoint = "traefik"
+
+[providers]
+  [providers.docker]
+    endpoint = "tcp://172.20.20.1:2376"
+    exposedByDefault = false
+    defaultRule = "Host(`{{ normalize .Name }}.docker.local`)"
+    watch = true
+    [providers.docker.tls]
+      ca = "/var/lib/traefik/.docker/ca.crt"
+      caOptional = true
+      cert = "/var/lib/traefik/.docker/cert.pem"
+      key = "/var/lib/traefik/.docker/key.pem"
+      insecureSkipVerify = false
+
+  [providers.file]
+    filename = "/etc/traefik/traefik.toml"
