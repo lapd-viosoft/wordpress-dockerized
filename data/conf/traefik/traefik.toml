@@ -33,7 +33,7 @@
       stsSeconds = 3153600
       stsPreload = true
       stsIncludeSubdomains = true
-      referrerPolicy = no-referrer
+      referrerPolicy = "no-referrer"
       featurePolicy = "accelerometer 'none'; ambient-light-sensor 'self'; autoplay 'self'; camera 'none'; encrypted-media 'self'; fullscreen 'self'; geolocation 'self'; gyroscope 'none'; magnetometer 'none'; microphone 'none'; midi 'none'; payment 'none'; picture-in-picture *; speaker 'none'; sync-xhr 'none'; usb *; vr 'none'"
       contentSecurityPolicy = "upgrade-insecure-requests: default-src 'self'"
   
