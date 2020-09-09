@@ -1,0 +1,2 @@
+# wordpress-dockerized
+wordpress-dockerized
